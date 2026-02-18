@@ -55,6 +55,45 @@ def cmd_generate(args):
     print("Done. You can now use 'predict', 'rankings', 'teams', 'stats' commands.")
 
 
+def cmd_diagnose(args):
+    """Show what's in the data files — leagues, teams, row counts."""
+    import pandas as pd
+    from config import DATA_DIR, ALL_TOP_LEAGUE_IDS, LEAGUE_TO_REGION
+    import os
+
+    years = args.years or [2024, 2025, 2026]
+    for year in years:
+        filepath = os.path.join(DATA_DIR, f"{year}_matches.csv")
+        if not os.path.exists(filepath):
+            print(f"=== {year}: FILE NOT FOUND ===\n")
+            continue
+
+        df = pd.read_csv(filepath, low_memory=False)
+        total = len(df)
+        team_df = df[df["position"] == "team"]
+        leagues = sorted(df["league"].dropna().unique())
+
+        size_mb = os.path.getsize(filepath) / (1024 * 1024)
+        print(f"=== {year} ({size_mb:.1f} MB, {total} rows, {len(team_df)} team rows) ===")
+        print(f"Leagues ({len(leagues)}):")
+        for lg in leagues:
+            n = len(team_df[team_df["league"] == lg])
+            region = LEAGUE_TO_REGION.get(lg, "")
+            marker = f" <- {region}" if region else ""
+            marker += " [TRACKED]" if lg in ALL_TOP_LEAGUE_IDS else ""
+            print(f"  {lg:25s} {n:5d} team rows{marker}")
+
+        # Top teams by game count in tracked leagues
+        tracked = team_df[team_df["league"].isin(ALL_TOP_LEAGUE_IDS)]
+        if len(tracked) > 0:
+            top = tracked["teamname"].value_counts().head(10)
+            print(f"\nTop teams in tracked leagues ({len(tracked)} rows):")
+            for name, count in top.items():
+                lg = tracked[tracked["teamname"] == name]["league"].iloc[0]
+                print(f"  {name:25s} {count:4d} games  ({lg})")
+        print()
+
+
 def cmd_import(args):
     """Import a manually downloaded Oracle's Elixir CSV."""
     csv_path = args.csv_path
@@ -230,6 +269,11 @@ def main():
     gen.add_argument("--years", type=int, nargs="+", default=None,
                      help="Years to generate (default: 2024 2025 2026)")
 
+    # Diagnose command
+    diag = subparsers.add_parser("diagnose", help="Show leagues and teams in your data")
+    diag.add_argument("--years", type=int, nargs="+", default=None,
+                      help="Years to inspect (default: 2024 2025 2026)")
+
     # Import command
     imp = subparsers.add_parser("import", help="Import a manually downloaded CSV")
     imp.add_argument("csv_path", help="Path to the downloaded CSV file")
@@ -270,6 +314,7 @@ def main():
     commands = {
         "download": cmd_download,
         "generate": cmd_generate,
+        "diagnose": cmd_diagnose,
         "import": cmd_import,
         "predict": cmd_predict,
         "rankings": cmd_rankings,

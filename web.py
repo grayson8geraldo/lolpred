@@ -15,7 +15,7 @@ from flask import Flask, render_template, request, jsonify
 from src.data_loader import load_data, clean_data, download_data
 from src.features import build_features
 from src.predictor import MatchPredictor
-from config import TOP_REGIONS, DATA_DIR
+from config import TOP_REGIONS, DATA_DIR, LEAGUE_TO_REGION, ALL_TOP_LEAGUE_IDS
 
 app = Flask(__name__)
 
@@ -71,16 +71,16 @@ def _load_predictor(years=None):
     _elo, _tracker, _team_league_map = build_features(df)
     _predictor = MatchPredictor(_elo, _tracker, _team_league_map)
 
-    # Build sorted team list
-    top_league_ids = [lid for lids in TOP_REGIONS.values() for lid in lids]
+    # Build sorted team list — use canonical region name for display
     _all_teams = sorted([
         {
             "name": team,
-            "league": league,
+            "league": LEAGUE_TO_REGION.get(league, league),
+            "raw_league": league,
             "elo": round(_elo.get_rating(team), 1),
         }
         for team, league in _team_league_map.items()
-        if league in top_league_ids
+        if league in ALL_TOP_LEAGUE_IDS
     ], key=lambda t: t["name"])
 
     print(f"Loaded {len(_all_teams)} teams. Server ready.")
@@ -160,7 +160,8 @@ def rankings():
         region = ""
 
     for i, (team, elo) in enumerate(teams, 1):
-        league = _team_league_map.get(team, "")
+        raw_league = _team_league_map.get(team, "")
+        league = LEAGUE_TO_REGION.get(raw_league, raw_league)
         stats = _tracker.get_stats(team)
         rankings_data.append({
             "rank": i,
@@ -187,7 +188,8 @@ def team_stats(team_name):
         return render_template("team.html", error=f"Team '{team_name}' not found",
                                team_name=team_name)
 
-    league = _team_league_map.get(team_name, "Unknown")
+    raw_league = _team_league_map.get(team_name, "Unknown")
+    league = LEAGUE_TO_REGION.get(raw_league, raw_league)
     elo = round(_elo.get_rating(team_name), 1)
 
     def pct(val):

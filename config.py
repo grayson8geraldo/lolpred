@@ -29,13 +29,13 @@ ORACLE_ELIXIR_URLS = {
     2022: "https://drive.google.com/uc?id=1EHmptHyzY8owv0BAcNKtkQpMwfkURwRy",
 }
 
-# Top 5 regions to track
-# LCK (Korea), LPL (China), LEC (Europe), LCS/LTA (North America), PCS (Pacific)
+# Top 5 regions — maps display name to ALL Oracle's Elixir league IDs
+# that belong to that region (including cups, qualifiers, academy, etc.)
 TOP_REGIONS = {
-    "LCK": ["LCK"],
+    "LCK": ["LCK", "LCK CL", "LCK Cup", "LCKC"],
     "LPL": ["LPL"],
     "LEC": ["LEC"],
-    "LCS": ["LCS", "LTA", "LTA North"],
+    "LCS": ["LCS", "LTA", "LTA North", "LTA South", "LTAN", "LTAS"],
     "PCS": ["PCS"],
 }
 
@@ -44,8 +44,19 @@ ALL_TOP_LEAGUE_IDS = []
 for league_ids in TOP_REGIONS.values():
     ALL_TOP_LEAGUE_IDS.extend(league_ids)
 
-# International tournaments to include
-INTERNATIONAL_TOURNAMENTS = ["MSI", "Worlds", "WLDs"]
+# Reverse mapping: league_id -> canonical region name
+LEAGUE_TO_REGION = {}
+for region, league_ids in TOP_REGIONS.items():
+    for lid in league_ids:
+        LEAGUE_TO_REGION[lid] = region
+
+# International tournaments — these games count for Elo but
+# don't determine a team's "home league"
+INTERNATIONAL_TOURNAMENTS = [
+    "MSI", "Worlds", "WLDs",
+    "All-Star", "Rift Rivals",
+    "Asian Games",
+]
 
 # Elo rating parameters
 ELO_INITIAL = 1500

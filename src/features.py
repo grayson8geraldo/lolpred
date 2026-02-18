@@ -8,7 +8,8 @@ which are then used as features for the prediction models.
 import numpy as np
 import pandas as pd
 from config import (
-    ELO_INITIAL, ELO_K_FACTOR, ELO_SEASON_DECAY, ROLLING_WINDOW
+    ELO_INITIAL, ELO_K_FACTOR, ELO_SEASON_DECAY, ROLLING_WINDOW,
+    LEAGUE_TO_REGION, ALL_TOP_LEAGUE_IDS,
 )
 
 
@@ -171,10 +172,14 @@ def build_features(df: pd.DataFrame) -> tuple[EloSystem, TeamStatsTracker, dict[
             elo.season_reset()
         prev_year = current_year
 
-        # Track team-league mapping
+        # Track team-league mapping.
+        # Prefer domestic leagues (LCK, LEC, etc.) over international tournaments
+        # (MSI, Worlds) so teams keep their home league identity.
         league = row_a.get("league", "")
-        team_league_map[team_a] = league
-        team_league_map[team_b] = league
+        is_domestic = league in ALL_TOP_LEAGUE_IDS
+        for t in (team_a, team_b):
+            if is_domestic or t not in team_league_map:
+                team_league_map[t] = league
 
         # Determine winner
         winner = team_a if row_a.get("result") == 1 else team_b
