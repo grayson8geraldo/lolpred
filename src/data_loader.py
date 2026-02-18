@@ -63,7 +63,7 @@ def generate_and_save_sample_data(years: list[int] = None) -> None:
     from src.sample_data import generate_sample_data
 
     if years is None:
-        years = [2024, 2025]
+        years = [2024, 2025, 2026]
 
     os.makedirs(DATA_DIR, exist_ok=True)
     df = generate_sample_data(years)

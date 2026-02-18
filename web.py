@@ -37,7 +37,7 @@ def _ensure_data():
 
     if not has_data:
         print("No data found. Generating sample data for 2024-2025...")
-        generate_and_save_sample_data([2024, 2025])
+        generate_and_save_sample_data([2024, 2025, 2026])
 
 
 def _load_predictor(years=None):
@@ -48,7 +48,7 @@ def _load_predictor(years=None):
         return
 
     if years is None:
-        years = [2024, 2025]
+        years = [2024, 2025, 2026]
 
     _ensure_data()
 

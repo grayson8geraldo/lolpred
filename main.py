@@ -40,7 +40,7 @@ from config import TOP_REGIONS
 
 def cmd_download(args):
     """Download Oracle's Elixir match data."""
-    years = args.years or [2024, 2025]
+    years = args.years or [2024, 2025, 2026]
     print(f"Downloading Oracle's Elixir data for years: {years}")
     download_data(years, force=args.force)
     print("Done.")
@@ -48,7 +48,7 @@ def cmd_download(args):
 
 def cmd_generate(args):
     """Generate sample data for testing (simulated matches based on real team stats)."""
-    years = args.years or [2024, 2025]
+    years = args.years or [2024, 2025, 2026]
     print(f"Generating sample match data for years: {years}")
     print("  (Based on real team rosters with simulated statistics)")
     generate_and_save_sample_data(years)
@@ -57,7 +57,7 @@ def cmd_generate(args):
 
 def cmd_predict(args):
     """Predict a match outcome."""
-    years = args.years or [2024, 2025]
+    years = args.years or [2024, 2025, 2026]
     team_a = args.team_a
     team_b = args.team_b
     match_format = args.format
@@ -80,7 +80,7 @@ def cmd_predict(args):
 
 def cmd_rankings(args):
     """Show team Elo rankings."""
-    years = args.years or [2024, 2025]
+    years = args.years or [2024, 2025, 2026]
 
     print(f"Loading data for years: {years}...")
     df = load_data(years)
@@ -111,7 +111,7 @@ def cmd_rankings(args):
 
 def cmd_teams(args):
     """List all known teams."""
-    years = args.years or [2024, 2025]
+    years = args.years or [2024, 2025, 2026]
 
     print(f"Loading data for years: {years}...")
     df = load_data(years)
@@ -144,7 +144,7 @@ def cmd_teams(args):
 
 def cmd_stats(args):
     """Show detailed team stats."""
-    years = args.years or [2024, 2025]
+    years = args.years or [2024, 2025, 2026]
     team_name = args.team
 
     print(f"Loading data for years: {years}...")
