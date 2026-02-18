@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}{{ pred.team_a }} vs {{ pred.team_b }} - Prediction{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="vs-header">
+    <div class="teams">
+        <a href="/team/{{ pred.team_a }}">{{ pred.team_a }}</a>
+        <span class="vs">VS</span>
+        <a href="/team/{{ pred.team_b }}">{{ pred.team_b }}</a>
+    </div>
+    <div class="format">{{ pred.format }} &middot; Elo: {{ pred.team_a_elo }} vs {{ pred.team_b_elo }}</div>
+</div>
+
+<!-- Winner -->
+<div class="winner-banner">
+    <div>Predicted Winner</div>
+    <div class="winner">{{ pred.winner_prediction.predicted_winner }}</div>
+    <div class="probs">
+        {{ pred.team_a }}: {{ pred.winner_prediction.team_a_win_prob }}% &middot;
+        {{ pred.team_b }}: {{ pred.winner_prediction.team_b_win_prob }}%
+        &middot;
+        <span class="badge badge-{{ pred.winner_prediction.confidence|lower }}">
+            {{ pred.winner_prediction.confidence }}
+        </span>
+    </div>
+    <div style="margin-top: 0.8rem;">
+        <div class="bar-container" style="max-width: 400px; margin: 0 auto;">
+            <div class="bar-fill bar-a" style="width: {{ pred.winner_prediction.team_a_win_prob }}%;">
+                {{ pred.winner_prediction.team_a_win_prob }}%
+            </div>
+            <div class="bar-fill bar-b" style="width: {{ pred.winner_prediction.team_b_win_prob }}%;">
+                {{ pred.winner_prediction.team_b_win_prob }}%
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Map Count -->
+{% if pred.map_count %}
+<div class="card">
+    <h2>Map Count ({{ pred.format }})</h2>
+    <p style="color: var(--text2); margin-bottom: 1rem;">
+        Most likely: <strong style="color: var(--accent);">{{ pred.map_count.most_likely_score }}</strong>
+        ({{ pred.map_count.most_likely_prob }}%)
+    </p>
+    <div class="score-list">
+        {% for s in pred.map_count.all_scores %}
+        <div class="score-row">
+            <div class="score-label">{{ s.score }}</div>
+            <div class="score-bar">
+                <div class="score-fill" style="width: {{ [s.probability * 2, 100] | min }}%;">
+                    {{ s.probability }}%
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div style="margin-top: 1rem;">
+        <p style="color: var(--text2); font-size: 0.85rem;">Total games distribution:</p>
+        <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
+            {% for games, prob in pred.map_count.total_games_distribution.items() %}
+            <div class="stat-box" style="flex: 1;">
+                <div class="val">{{ prob }}%</div>
+                <div class="lbl">{{ games }} games</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Stats Comparison -->
+<div class="card">
+    <h2>Team Statistics</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Stat</th>
+                <th style="text-align:right">{{ pred.team_a }}</th>
+                <th style="text-align:right">{{ pred.team_b }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% set sa = pred.team_a_stats %}
+            {% set sb = pred.team_b_stats %}
+            <tr><td>Games Played</td><td style="text-align:right">{{ sa.games_played }}</td><td style="text-align:right">{{ sb.games_played }}</td></tr>
+            <tr><td>Win Rate</td><td style="text-align:right">{{ sa.win_rate }}</td><td style="text-align:right">{{ sb.win_rate }}</td></tr>
+            <tr><td>Avg Game (min)</td><td style="text-align:right">{{ sa.avg_game_min }}</td><td style="text-align:right">{{ sb.avg_game_min }}</td></tr>
+            <tr><td>First Tower %</td><td style="text-align:right">{{ sa.first_tower }}</td><td style="text-align:right">{{ sb.first_tower }}</td></tr>
+            <tr><td>First Dragon %</td><td style="text-align:right">{{ sa.first_dragon }}</td><td style="text-align:right">{{ sb.first_dragon }}</td></tr>
+            <tr><td>First Blood %</td><td style="text-align:right">{{ sa.first_blood }}</td><td style="text-align:right">{{ sb.first_blood }}</td></tr>
+            <tr><td>First Herald %</td><td style="text-align:right">{{ sa.first_herald }}</td><td style="text-align:right">{{ sb.first_herald }}</td></tr>
+            <tr><td>Avg Kills</td><td style="text-align:right">{{ sa.avg_kills }}</td><td style="text-align:right">{{ sb.avg_kills }}</td></tr>
+            <tr><td>Avg Deaths</td><td style="text-align:right">{{ sa.avg_deaths }}</td><td style="text-align:right">{{ sb.avg_deaths }}</td></tr>
+            <tr><td>Gold Diff @10</td><td style="text-align:right">{{ sa.gold_diff_10 }}</td><td style="text-align:right">{{ sb.gold_diff_10 }}</td></tr>
+            <tr><td>Gold Diff @15</td><td style="text-align:right">{{ sa.gold_diff_15 }}</td><td style="text-align:right">{{ sb.gold_diff_15 }}</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- Game Duration -->
+{% if pred.game_duration and not pred.game_duration.get('error') %}
+<div class="card">
+    <h2>Game Duration</h2>
+    <div class="stat-grid" style="margin-bottom: 1rem;">
+        <div class="stat-box">
+            <div class="val">~{{ pred.game_duration.predicted_minutes }}</div>
+            <div class="lbl">Predicted (min)</div>
+        </div>
+        <div class="stat-box">
+            <div class="val">{{ pred.game_duration.team_a_avg_minutes }}</div>
+            <div class="lbl">{{ pred.team_a }} avg</div>
+        </div>
+        <div class="stat-box">
+            <div class="val">{{ pred.game_duration.team_b_avg_minutes }}</div>
+            <div class="lbl">{{ pred.team_b }} avg</div>
+        </div>
+    </div>
+    <p style="color: var(--text2); font-size: 0.85rem; margin-bottom: 0.5rem;">Over/Under lines:</p>
+    <table>
+        <thead>
+            <tr><th>Line</th><th style="text-align:right">Over</th><th style="text-align:right">Under</th></tr>
+        </thead>
+        <tbody>
+            {% for threshold, ou in pred.game_duration.over_under.items() %}
+            <tr>
+                <td>{{ threshold }} min</td>
+                <td style="text-align:right">{{ ou.over_prob }}%</td>
+                <td style="text-align:right">{{ ou.under_prob }}%</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- First Objectives -->
+<div class="card">
+    <h2>First Objectives</h2>
+    <div class="obj-grid">
+        {% for obj_key in ['first_tower', 'first_dragon', 'first_blood', 'first_herald'] %}
+        {% set obj = pred[obj_key] %}
+        {% if obj and not obj.get('error') %}
+        <div class="obj-card">
+            <div class="obj-title">First {{ obj.objective }}</div>
+            <div class="obj-winner" style="color: var(--accent);">{{ obj.predicted_team }}</div>
+            <div class="bar-container">
+                <div class="bar-fill bar-a" style="width: {{ obj.team_a_prob }}%;" title="{{ pred.team_a }}">
+                    {{ obj.team_a_prob }}%
+                </div>
+                <div class="bar-fill bar-b" style="width: {{ obj.team_b_prob }}%;" title="{{ pred.team_b }}">
+                    {{ obj.team_b_prob }}%
+                </div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text2); margin-top: 0.3rem;">
+                <span>{{ pred.team_a }} ({{ obj.team_a_rate }}%)</span>
+                <span>{{ pred.team_b }} ({{ obj.team_b_rate }}%)</span>
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+
+<div style="text-align: center; margin-top: 1rem;">
+    <a href="/" style="color: var(--text2);">&larr; New Prediction</a>
+</div>
+{% endblock %}

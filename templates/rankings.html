@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Rankings - LoL Predictor{% endblock %}
+
+{% block content %}
+<div class="page-title">{{ title }}</div>
+
+<div class="region-filter">
+    <a href="/rankings" class="region-btn {% if not selected_region %}active{% endif %}">All</a>
+    {% for r in regions %}
+    <a href="/rankings?region={{ r }}" class="region-btn {% if selected_region == r %}active{% endif %}">{{ r }}</a>
+    {% endfor %}
+</div>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Team</th>
+                <th>League</th>
+                <th style="text-align:right">Elo</th>
+                <th style="text-align:right">Win Rate</th>
+                <th style="text-align:right">Games</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rankings %}
+            <tr>
+                <td style="color: var(--text2);">{{ row.rank }}</td>
+                <td><a href="/team/{{ row.team }}">{{ row.team }}</a></td>
+                <td><span class="badge badge-league">{{ row.league }}</span></td>
+                <td style="text-align:right; font-weight: 600;">{{ row.elo }}</td>
+                <td style="text-align:right;">{{ row.win_rate }}</td>
+                <td style="text-align:right; color: var(--text2);">{{ row.games }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

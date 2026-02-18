@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}LoL Predictor - Match Prediction{% endblock %}
+
+{% block content %}
+<div class="page-title">Match Prediction</div>
+
+{% if error %}
+<div class="alert">{{ error }}</div>
+{% endif %}
+
+<div class="card">
+    <h2>Select Teams</h2>
+    <form method="POST" action="/predict">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="region_filter">Filter by Region</label>
+                <select id="region_filter" onchange="filterTeams()">
+                    <option value="">All Regions</option>
+                    {% for r in regions %}
+                    <option value="{{ r }}">{{ r }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <br>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="team_a">Team A</label>
+                <select name="team_a" id="team_a" required>
+                    <option value="">-- Select Team --</option>
+                    {% for t in teams %}
+                    <option value="{{ t.name }}" data-league="{{ t.league }}">{{ t.name }} ({{ t.league }}, Elo: {{ t.elo }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div style="font-size: 1.5rem; font-weight: 700; color: var(--text2); padding-bottom: 0.3rem;">VS</div>
+
+            <div class="form-group">
+                <label for="team_b">Team B</label>
+                <select name="team_b" id="team_b" required>
+                    <option value="">-- Select Team --</option>
+                    {% for t in teams %}
+                    <option value="{{ t.name }}" data-league="{{ t.league }}">{{ t.name }} ({{ t.league }}, Elo: {{ t.elo }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="format">Format</label>
+                <select name="format" id="format">
+                    <option value="BO1">BO1</option>
+                    <option value="BO3" selected>BO3</option>
+                    <option value="BO5">BO5</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <button type="submit">Predict</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Quick Match Examples</h2>
+    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+        <form method="POST" action="/predict" style="display:inline">
+            <input type="hidden" name="team_a" value="T1">
+            <input type="hidden" name="team_b" value="Gen.G">
+            <input type="hidden" name="format" value="BO3">
+            <button type="submit" style="font-size:0.85rem; padding:0.4rem 0.8rem;">T1 vs Gen.G (BO3)</button>
+        </form>
+        <form method="POST" action="/predict" style="display:inline">
+            <input type="hidden" name="team_a" value="Bilibili Gaming">
+            <input type="hidden" name="team_b" value="Top Esports">
+            <input type="hidden" name="format" value="BO5">
+            <button type="submit" style="font-size:0.85rem; padding:0.4rem 0.8rem;">BLG vs TES (BO5)</button>
+        </form>
+        <form method="POST" action="/predict" style="display:inline">
+            <input type="hidden" name="team_a" value="G2 Esports">
+            <input type="hidden" name="team_b" value="Fnatic">
+            <input type="hidden" name="format" value="BO3">
+            <button type="submit" style="font-size:0.85rem; padding:0.4rem 0.8rem;">G2 vs FNC (BO3)</button>
+        </form>
+        <form method="POST" action="/predict" style="display:inline">
+            <input type="hidden" name="team_a" value="T1">
+            <input type="hidden" name="team_b" value="Bilibili Gaming">
+            <input type="hidden" name="format" value="BO5">
+            <button type="submit" style="font-size:0.85rem; padding:0.4rem 0.8rem;">T1 vs BLG (BO5)</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterTeams() {
+    const region = document.getElementById('region_filter').value;
+    const selects = [document.getElementById('team_a'), document.getElementById('team_b')];
+
+    selects.forEach(sel => {
+        const options = sel.querySelectorAll('option[data-league]');
+        options.forEach(opt => {
+            if (!region || opt.dataset.league === region) {
+                opt.style.display = '';
+            } else {
+                opt.style.display = 'none';
+                if (opt.selected) sel.value = '';
+            }
+        });
+    });
+}
+</script>
+{% endblock %}

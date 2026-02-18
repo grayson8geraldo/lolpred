@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}LoL Predictor{% endblock %}</title>
+    <style>
+        :root {
+            --bg: #0a0e14;
+            --bg2: #121820;
+            --bg3: #1a2332;
+            --accent: #c89b3c;
+            --accent2: #0ac8b9;
+            --text: #e0e0e0;
+            --text2: #8a9bae;
+            --win: #2ecc71;
+            --lose: #e74c3c;
+            --border: #2a3a4a;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+        }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { color: var(--accent2); }
+
+        .navbar {
+            background: var(--bg2);
+            border-bottom: 1px solid var(--border);
+            padding: 0.8rem 2rem;
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+        .navbar .logo {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: 1px;
+        }
+        .navbar nav { display: flex; gap: 1.5rem; }
+        .navbar nav a {
+            color: var(--text2);
+            font-size: 0.95rem;
+            padding: 0.3rem 0;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .navbar nav a:hover, .navbar nav a.active {
+            color: var(--text);
+            border-bottom-color: var(--accent);
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .card {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .card h2 {
+            color: var(--accent);
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Forms */
+        select, button {
+            background: var(--bg3);
+            color: var(--text);
+            border: 1px solid var(--border);
+            padding: 0.6rem 1rem;
+            border-radius: 4px;
+            font-size: 0.95rem;
+        }
+        select { cursor: pointer; min-width: 200px; }
+        select:focus { outline: none; border-color: var(--accent); }
+        button {
+            background: var(--accent);
+            color: #000;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: background 0.2s;
+        }
+        button:hover { background: #d4a84a; }
+        label {
+            display: block;
+            color: var(--text2);
+            font-size: 0.85rem;
+            margin-bottom: 0.3rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .form-row {
+            display: flex;
+            gap: 1.5rem;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+        .form-group { display: flex; flex-direction: column; }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; }
+        th {
+            text-align: left;
+            color: var(--text2);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 0.6rem 0.8rem;
+            border-bottom: 1px solid var(--border);
+        }
+        td {
+            padding: 0.6rem 0.8rem;
+            border-bottom: 1px solid rgba(42,58,74,0.5);
+            font-size: 0.95rem;
+        }
+        tr:hover td { background: rgba(200,155,60,0.05); }
+
+        /* Progress bars */
+        .bar-container {
+            background: var(--bg);
+            border-radius: 4px;
+            height: 22px;
+            display: flex;
+            overflow: hidden;
+            position: relative;
+        }
+        .bar-fill {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+            transition: width 0.5s ease;
+            min-width: 30px;
+        }
+        .bar-a { background: var(--accent); color: #000; }
+        .bar-b { background: var(--accent2); color: #000; }
+
+        /* Stat grid */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 1rem;
+        }
+        .stat-box {
+            background: var(--bg);
+            border-radius: 6px;
+            padding: 0.8rem;
+            text-align: center;
+        }
+        .stat-box .val {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .stat-box .lbl {
+            font-size: 0.75rem;
+            color: var(--text2);
+            text-transform: uppercase;
+            margin-top: 0.2rem;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 0.15rem 0.5rem;
+            border-radius: 3px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .badge-high { background: var(--win); color: #000; }
+        .badge-medium { background: var(--accent); color: #000; }
+        .badge-low { background: var(--text2); color: #000; }
+        .badge-league {
+            background: var(--bg3);
+            color: var(--text2);
+            border: 1px solid var(--border);
+        }
+
+        /* Alert */
+        .alert {
+            background: rgba(231,76,60,0.15);
+            border: 1px solid var(--lose);
+            color: var(--lose);
+            padding: 0.8rem 1rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+
+        .vs-header {
+            text-align: center;
+            padding: 1rem 0;
+        }
+        .vs-header .teams {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .vs-header .vs { color: var(--text2); margin: 0 0.5rem; }
+        .vs-header .format {
+            color: var(--text2);
+            font-size: 0.9rem;
+            margin-top: 0.3rem;
+        }
+
+        .winner-banner {
+            text-align: center;
+            padding: 1.2rem;
+            background: linear-gradient(135deg, rgba(200,155,60,0.1), rgba(10,200,185,0.1));
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        .winner-banner .winner {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .winner-banner .probs {
+            color: var(--text2);
+            font-size: 0.9rem;
+            margin-top: 0.3rem;
+        }
+
+        /* Score cards */
+        .score-list { display: flex; flex-direction: column; gap: 0.5rem; }
+        .score-row {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+        }
+        .score-row .score-label {
+            width: 50px;
+            font-weight: 600;
+            text-align: center;
+        }
+        .score-row .score-bar {
+            flex: 1;
+            height: 24px;
+            background: var(--bg);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .score-row .score-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            padding-left: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #000;
+            transition: width 0.5s ease;
+        }
+
+        /* Objective cards */
+        .obj-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 1rem;
+        }
+        .obj-card {
+            background: var(--bg);
+            border-radius: 6px;
+            padding: 1rem;
+        }
+        .obj-card .obj-title {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            color: var(--text2);
+            letter-spacing: 0.5px;
+            margin-bottom: 0.6rem;
+        }
+        .obj-card .obj-winner {
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .region-filter {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+        .region-btn {
+            padding: 0.4rem 1rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            background: var(--bg3);
+            color: var(--text2);
+            border: 1px solid var(--border);
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .region-btn:hover, .region-btn.active {
+            background: var(--accent);
+            color: #000;
+            border-color: var(--accent);
+        }
+
+        .page-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            color: var(--text);
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text2);
+            font-size: 0.8rem;
+        }
+        footer a { color: var(--text2); }
+
+        @media (max-width: 600px) {
+            .form-row { flex-direction: column; }
+            .navbar { flex-direction: column; gap: 0.5rem; }
+            .container { padding: 1rem; }
+            .vs-header .teams { font-size: 1.1rem; }
+        }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <div class="navbar">
+        <a href="/" class="logo">LoL PREDICTOR</a>
+        <nav>
+            <a href="/" class="{% if request.path == '/' %}active{% endif %}">Predict</a>
+            <a href="/rankings" class="{% if '/rankings' in request.path %}active{% endif %}">Rankings</a>
+        </nav>
+    </div>
+
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+
+    <footer>
+        Data: <a href="https://oracleselixir.com" target="_blank">Oracle's Elixir</a>
+        &middot; <a href="https://gol.gg" target="_blank">gol.gg</a>
+        &middot; <a href="https://lol.fandom.com" target="_blank">Leaguepedia</a>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

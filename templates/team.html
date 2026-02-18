@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}{{ team.name if team else team_name }} - LoL Predictor{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="alert">{{ error }}</div>
+<a href="/rankings">&larr; Back to Rankings</a>
+{% else %}
+
+<div class="page-title">
+    {{ team.name }}
+    <span class="badge badge-league" style="vertical-align: middle; font-size: 0.8rem;">{{ team.league }}</span>
+</div>
+
+<!-- Key Stats -->
+<div class="stat-grid" style="margin-bottom: 1.5rem;">
+    <div class="stat-box">
+        <div class="val">{{ team.elo }}</div>
+        <div class="lbl">Elo Rating</div>
+    </div>
+    <div class="stat-box">
+        <div class="val">{{ team.win_rate if team.win_rate is not none else 'N/A' }}%</div>
+        <div class="lbl">Win Rate</div>
+    </div>
+    <div class="stat-box">
+        <div class="val">{{ team.games_played }}</div>
+        <div class="lbl">Games Played</div>
+    </div>
+    <div class="stat-box">
+        <div class="val">{{ team.avg_gamelength_min if team.avg_gamelength_min is not none else 'N/A' }}</div>
+        <div class="lbl">Avg Game (min)</div>
+    </div>
+</div>
+
+<!-- First Objectives -->
+<div class="card">
+    <h2>First Objectives (last {{ team.recent_games }} games)</h2>
+    <table>
+        <thead>
+            <tr><th>Objective</th><th style="text-align:right">Rate</th><th style="width:50%">Distribution</th></tr>
+        </thead>
+        <tbody>
+            {% for label, val in [
+                ('First Blood', team.first_blood),
+                ('First Tower', team.first_tower),
+                ('First Dragon', team.first_dragon),
+                ('First Herald', team.first_herald),
+                ('First Baron', team.first_baron),
+            ] %}
+            <tr>
+                <td>{{ label }}</td>
+                <td style="text-align:right; font-weight:600;">{{ val if val is not none else 'N/A' }}{% if val is not none %}%{% endif %}</td>
+                <td>
+                    {% if val is not none %}
+                    <div class="bar-container">
+                        <div class="bar-fill bar-a" style="width: {{ val }}%;">{% if val > 15 %}{{ val }}%{% endif %}</div>
+                    </div>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Combat Stats -->
+<div class="card">
+    <h2>Combat Stats (avg per game)</h2>
+    <div class="stat-grid">
+        <div class="stat-box">
+            <div class="val" style="color: var(--win);">{{ team.avg_kills if team.avg_kills is not none else 'N/A' }}</div>
+            <div class="lbl">Kills</div>
+        </div>
+        <div class="stat-box">
+            <div class="val" style="color: var(--lose);">{{ team.avg_deaths if team.avg_deaths is not none else 'N/A' }}</div>
+            <div class="lbl">Deaths</div>
+        </div>
+        <div class="stat-box">
+            <div class="val">{{ team.avg_assists if team.avg_assists is not none else 'N/A' }}</div>
+            <div class="lbl">Assists</div>
+        </div>
+    </div>
+</div>
+
+<!-- Objectives -->
+<div class="card">
+    <h2>Objectives (avg per game)</h2>
+    <div class="stat-grid">
+        <div class="stat-box">
+            <div class="val">{{ team.avg_dragons if team.avg_dragons is not none else 'N/A' }}</div>
+            <div class="lbl">Dragons</div>
+        </div>
+        <div class="stat-box">
+            <div class="val">{{ team.avg_towers if team.avg_towers is not none else 'N/A' }}</div>
+            <div class="lbl">Towers</div>
+        </div>
+        <div class="stat-box">
+            <div class="val">{{ team.avg_barons if team.avg_barons is not none else 'N/A' }}</div>
+            <div class="lbl">Barons</div>
+        </div>
+        <div class="stat-box">
+            <div class="val">{{ team.avg_heralds if team.avg_heralds is not none else 'N/A' }}</div>
+            <div class="lbl">Heralds</div>
+        </div>
+    </div>
+</div>
+
+<!-- Economy -->
+<div class="card">
+    <h2>Economy</h2>
+    <div class="stat-grid">
+        <div class="stat-box">
+            <div class="val" style="color: {% if team.gold_diff_10 and team.gold_diff_10 > 0 %}var(--win){% elif team.gold_diff_10 and team.gold_diff_10 < 0 %}var(--lose){% else %}var(--text){% endif %};">
+                {% if team.gold_diff_10 is not none %}{{ '%+d' | format(team.gold_diff_10|int) }}{% else %}N/A{% endif %}
+            </div>
+            <div class="lbl">Gold Diff @10</div>
+        </div>
+        <div class="stat-box">
+            <div class="val" style="color: {% if team.gold_diff_15 and team.gold_diff_15 > 0 %}var(--win){% elif team.gold_diff_15 and team.gold_diff_15 < 0 %}var(--lose){% else %}var(--text){% endif %};">
+                {% if team.gold_diff_15 is not none %}{{ '%+d' | format(team.gold_diff_15|int) }}{% else %}N/A{% endif %}
+            </div>
+            <div class="lbl">Gold Diff @15</div>
+        </div>
+    </div>
+</div>
+
+<div style="text-align: center; margin-top: 1rem;">
+    <a href="/rankings" style="color: var(--text2);">&larr; Back to Rankings</a>
+</div>
+
+{% endif %}
+{% endblock %}
