@@ -49,24 +49,41 @@ source venv/bin/activate        # Linux / macOS
 pip install -r requirements.txt
 ```
 
-### 5. Загрузка данных
+### 5. Загрузка данных (реальные данные)
 
-**Вариант A: Скачать реальные данные из Oracle's Elixir**
+**Вариант A: Автоматическая загрузка**
 ```bash
 python main.py download
 ```
-Скачивает CSV за 2024-2025 из [Oracle's Elixir](https://oracleselixir.com/tools/downloads).
+Пробует скачать CSV за 2024-2026 из:
+1. S3 бакета Oracle's Elixir (основной, обновляется ежедневно)
+2. Google Drive (запасной)
 
-Для дополнительных годов:
+Для конкретных годов:
 ```bash
-python main.py download --years 2022 2023 2024 2025
+python main.py download --years 2024 2025 2026
+python main.py download --force    # перезакачать
 ```
 
-**Вариант B: Сгенерировать тестовые данные**
+**Вариант B: Ручная загрузка (если автоматика не работает)**
+1. Зайти на [oracleselixir.com/tools/downloads](https://oracleselixir.com/tools/downloads)
+2. Скачать CSV за нужные годы
+3. Импортировать:
+```bash
+python main.py import ~/Downloads/2026_LoL_esports_match_data_from_OraclesElixir_20260218.csv
+python main.py import ~/Downloads/2025_LoL_esports_match_data_from_OraclesElixir_20260218.csv
+```
+Или просто скопировать в `data/`:
+```bash
+cp ~/Downloads/2026_LoL_*.csv data/2026_matches.csv
+cp ~/Downloads/2025_LoL_*.csv data/2025_matches.csv
+cp ~/Downloads/2024_LoL_*.csv data/2024_matches.csv
+```
+
+**Вариант C: Тестовые данные (НЕ реальные)**
 ```bash
 python main.py generate
 ```
-Генерирует симулированные данные на основе реальных составов команд для быстрого тестирования.
 
 ### 6. Запуск
 
@@ -74,7 +91,7 @@ python main.py generate
 ```bash
 python web.py
 ```
-Откройте http://localhost:5000 в браузере.
+Откройте http://localhost:3080 в браузере.
 
 #### Командная строка (CLI)
 ```bash

@@ -6,35 +6,136 @@ LoL esports match data with 100+ columns per row, updated daily.
 
 Data structure: Each game has 12 rows (2 team rows + 10 player rows).
 Team rows have position='team', player rows have lane positions.
+
+Download methods (tried in order):
+1. S3 bucket (oracleselixir-downloadable-match-data.s3-us-west-2.amazonaws.com)
+2. Google Drive via gdown
+3. Manual: place CSV files in data/ directory
 """
 
 import os
+import glob as glob_module
+import shutil
+from datetime import datetime
+
 import pandas as pd
+import requests
 import gdown
-from config import ORACLE_ELIXIR_URLS, ALL_TOP_LEAGUE_IDS, DATA_DIR
+from config import (
+    ORACLE_ELIXIR_S3_BUCKET, ORACLE_ELIXIR_URLS, ALL_TOP_LEAGUE_IDS, DATA_DIR
+)
+
+
+def _try_download_s3(year: int, filepath: str) -> bool:
+    """Try downloading from Oracle's Elixir S3 bucket.
+
+    The filename includes a date suffix that changes daily.
+    We try today's date first, then go backwards up to 7 days.
+    """
+    today = datetime.now()
+    for days_ago in range(8):
+        from datetime import timedelta
+        date = today - timedelta(days=days_ago)
+        date_str = date.strftime("%Y%m%d")
+        filename = (
+            f"{year}_LoL_esports_match_data_from_OraclesElixir_{date_str}.csv"
+        )
+        url = f"{ORACLE_ELIXIR_S3_BUCKET}/{filename}"
+        try:
+            resp = requests.get(url, stream=True, timeout=30)
+            if resp.status_code == 200:
+                with open(filepath, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                size_mb = os.path.getsize(filepath) / (1024 * 1024)
+                print(f"  {year}: downloaded from S3 ({size_mb:.1f} MB) [{filename}]")
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _try_download_gdrive(year: int, filepath: str) -> bool:
+    """Try downloading from Google Drive via gdown."""
+    url = ORACLE_ELIXIR_URLS.get(year)
+    if not url:
+        return False
+    try:
+        gdown.download(url, filepath, quiet=True)
+        if os.path.exists(filepath) and os.path.getsize(filepath) > 1000:
+            size_mb = os.path.getsize(filepath) / (1024 * 1024)
+            print(f"  {year}: downloaded from Google Drive ({size_mb:.1f} MB)")
+            return True
+        return False
+    except Exception:
+        return False
 
 
 def download_data(years: list[int], force: bool = False) -> None:
-    """Download Oracle's Elixir CSV files for specified years."""
+    """Download Oracle's Elixir CSV files for specified years.
+
+    Tries S3 first, then Google Drive. If both fail, prints manual instructions.
+    """
     os.makedirs(DATA_DIR, exist_ok=True)
+    failed = []
 
     for year in years:
         filepath = os.path.join(DATA_DIR, f"{year}_matches.csv")
         if os.path.exists(filepath) and not force:
-            print(f"  {year}: already exists, skipping (use --force to re-download)")
+            size_mb = os.path.getsize(filepath) / (1024 * 1024)
+            print(f"  {year}: already exists ({size_mb:.1f} MB), skipping (use --force to re-download)")
             continue
 
-        url = ORACLE_ELIXIR_URLS.get(year)
-        if not url:
-            print(f"  {year}: no download URL configured, skipping")
+        print(f"  {year}: trying S3...")
+        if _try_download_s3(year, filepath):
             continue
 
-        print(f"  {year}: downloading from Oracle's Elixir...")
-        try:
-            gdown.download(url, filepath, quiet=True)
-            print(f"  {year}: saved to {filepath}")
-        except Exception as e:
-            print(f"  {year}: download failed - {e}")
+        print(f"  {year}: S3 failed, trying Google Drive...")
+        if _try_download_gdrive(year, filepath):
+            continue
+
+        print(f"  {year}: download failed")
+        failed.append(year)
+
+    if failed:
+        print()
+        print("  Some years failed to download. Manual download:")
+        print("  1. Go to https://oracleselixir.com/tools/downloads")
+        print("  2. Download CSV files for the needed years")
+        print(f"  3. Save them as:")
+        for y in failed:
+            print(f"     data/{y}_matches.csv")
+        print()
+
+
+def import_csv(csv_path: str, year: int = None) -> None:
+    """Import a manually downloaded Oracle's Elixir CSV into the data directory.
+
+    Args:
+        csv_path: Path to the downloaded CSV file
+        year: Year label (auto-detected from filename if not specified)
+    """
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(f"File not found: {csv_path}")
+
+    # Auto-detect year from filename
+    if year is None:
+        basename = os.path.basename(csv_path)
+        for y in range(2020, 2030):
+            if str(y) in basename:
+                year = y
+                break
+        if year is None:
+            raise ValueError(
+                "Cannot detect year from filename. "
+                "Specify --year or name the file like '2026_....csv'"
+            )
+
+    os.makedirs(DATA_DIR, exist_ok=True)
+    dest = os.path.join(DATA_DIR, f"{year}_matches.csv")
+    shutil.copy2(csv_path, dest)
+    size_mb = os.path.getsize(dest) / (1024 * 1024)
+    print(f"  Imported {csv_path} -> {dest} ({size_mb:.1f} MB)")
 
 
 def load_data(years: list[int]) -> pd.DataFrame:
@@ -45,14 +146,20 @@ def load_data(years: list[int]) -> pd.DataFrame:
         if not os.path.exists(filepath):
             print(f"  Warning: {filepath} not found, skipping")
             continue
-        print(f"  Loading {year} data...")
+        size_mb = os.path.getsize(filepath) / (1024 * 1024)
+        print(f"  Loading {year} data ({size_mb:.1f} MB)...")
         df = pd.read_csv(filepath, low_memory=False)
         frames.append(df)
 
     if not frames:
         raise FileNotFoundError(
-            "No data files found. Run 'python main.py download' or "
-            "'python main.py generate' first."
+            "No data files found in data/ directory.\n\n"
+            "To get real data:\n"
+            "  1. Go to https://oracleselixir.com/tools/downloads\n"
+            "  2. Download CSV files for the years you need\n"
+            "  3. Save them as data/2024_matches.csv, data/2025_matches.csv, etc.\n"
+            "  Or run: python main.py download\n"
+            "  Or run: python main.py import /path/to/downloaded.csv"
         )
 
     return pd.concat(frames, ignore_index=True)

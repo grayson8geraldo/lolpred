@@ -30,7 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src.data_loader import (
     download_data, load_data, clean_data, filter_top_regions,
-    generate_and_save_sample_data,
+    generate_and_save_sample_data, import_csv,
 )
 from src.features import build_features
 from src.predictor import MatchPredictor
@@ -53,6 +53,14 @@ def cmd_generate(args):
     print("  (Based on real team rosters with simulated statistics)")
     generate_and_save_sample_data(years)
     print("Done. You can now use 'predict', 'rankings', 'teams', 'stats' commands.")
+
+
+def cmd_import(args):
+    """Import a manually downloaded Oracle's Elixir CSV."""
+    csv_path = args.csv_path
+    year = args.year
+    import_csv(csv_path, year)
+    print("Done. The data is ready to use.")
 
 
 def cmd_predict(args):
@@ -220,7 +228,13 @@ def main():
     # Generate command
     gen = subparsers.add_parser("generate", help="Generate sample data for testing")
     gen.add_argument("--years", type=int, nargs="+", default=None,
-                     help="Years to generate (default: 2024 2025)")
+                     help="Years to generate (default: 2024 2025 2026)")
+
+    # Import command
+    imp = subparsers.add_parser("import", help="Import a manually downloaded CSV")
+    imp.add_argument("csv_path", help="Path to the downloaded CSV file")
+    imp.add_argument("--year", type=int, default=None,
+                     help="Year label (auto-detected from filename if omitted)")
 
     # Predict command
     pred = subparsers.add_parser("predict", help="Predict match outcome")
@@ -256,6 +270,7 @@ def main():
     commands = {
         "download": cmd_download,
         "generate": cmd_generate,
+        "import": cmd_import,
         "predict": cmd_predict,
         "rankings": cmd_rankings,
         "teams": cmd_teams,

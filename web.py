@@ -12,7 +12,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from flask import Flask, render_template, request, jsonify
-from src.data_loader import load_data, clean_data, generate_and_save_sample_data
+from src.data_loader import load_data, clean_data, download_data
 from src.features import build_features
 from src.predictor import MatchPredictor
 from config import TOP_REGIONS, DATA_DIR
@@ -27,33 +27,44 @@ _team_league_map = None
 _all_teams = []
 
 
-def _ensure_data():
-    """Download or generate data if no CSV files exist."""
-    has_data = any(
-        f.endswith("_matches.csv")
-        for f in os.listdir(DATA_DIR)
-        if os.path.isfile(os.path.join(DATA_DIR, f))
-    ) if os.path.isdir(DATA_DIR) else False
+def _ensure_data(years):
+    """Download real data from Oracle's Elixir if CSV files are missing."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    missing = [
+        y for y in years
+        if not os.path.isfile(os.path.join(DATA_DIR, f"{y}_matches.csv"))
+    ]
+    if missing:
+        print(f"Missing data for years: {missing}. Downloading from Oracle's Elixir...")
+        download_data(missing)
 
-    if not has_data:
-        print("No data found. Generating sample data for 2024-2025...")
-        generate_and_save_sample_data([2024, 2025, 2026])
+
+_load_error = None
 
 
 def _load_predictor(years=None):
     """Load data and build predictor (cached globally)."""
-    global _predictor, _elo, _tracker, _team_league_map, _all_teams
+    global _predictor, _elo, _tracker, _team_league_map, _all_teams, _load_error
 
     if _predictor is not None:
-        return
+        return True
+
+    if _load_error is not None:
+        return False
 
     if years is None:
         years = [2024, 2025, 2026]
 
-    _ensure_data()
+    _ensure_data(years)
 
-    print("Loading data...")
-    df = load_data(years)
+    try:
+        print("Loading data...")
+        df = load_data(years)
+    except FileNotFoundError as e:
+        _load_error = str(e)
+        print(f"ERROR: {_load_error}")
+        return False
+
     df = clean_data(df)
 
     print("Building Elo ratings and team stats...")
@@ -73,12 +84,19 @@ def _load_predictor(years=None):
     ], key=lambda t: t["name"])
 
     print(f"Loaded {len(_all_teams)} teams. Server ready.")
+    return True
+
+
+def _nodata():
+    """Return the 'no data' error page."""
+    return render_template("nodata.html"), 503
 
 
 @app.route("/")
 def index():
     """Main page with prediction form."""
-    _load_predictor()
+    if not _load_predictor():
+        return _nodata()
     regions = list(TOP_REGIONS.keys())
     return render_template("index.html", teams=_all_teams, regions=regions)
 
@@ -86,7 +104,8 @@ def index():
 @app.route("/predict", methods=["POST"])
 def predict():
     """Handle prediction request."""
-    _load_predictor()
+    if not _load_predictor():
+        return _nodata()
 
     team_a = request.form.get("team_a", "").strip()
     team_b = request.form.get("team_b", "").strip()
@@ -115,7 +134,8 @@ def predict():
 @app.route("/rankings")
 def rankings():
     """Rankings page."""
-    _load_predictor()
+    if not _load_predictor():
+        return _nodata()
 
     region = request.args.get("region", "")
     rankings_data = []
@@ -159,7 +179,8 @@ def rankings():
 @app.route("/team/<team_name>")
 def team_stats(team_name):
     """Team detail page."""
-    _load_predictor()
+    if not _load_predictor():
+        return _nodata()
 
     stats = _tracker.get_stats(team_name)
     if not stats:
@@ -205,7 +226,8 @@ def team_stats(team_name):
 @app.route("/api/teams")
 def api_teams():
     """API: list teams, optionally filtered by region."""
-    _load_predictor()
+    if not _load_predictor():
+        return jsonify({"error": "No data loaded"}), 503
     region = request.args.get("region", "")
     if region and region in TOP_REGIONS:
         league_ids = TOP_REGIONS[region]

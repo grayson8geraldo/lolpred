@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Data Required - LoL Predictor{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 700px; margin: 2rem auto;">
+    <h2>Data Required</h2>
+    <p style="margin-bottom: 1rem;">
+        No match data found. Download real data from Oracle's Elixir to use the predictor.
+    </p>
+
+    <div style="background: var(--bg); border-radius: 6px; padding: 1.2rem; margin-bottom: 1.5rem;">
+        <p style="color: var(--accent); font-weight: 600; margin-bottom: 0.8rem;">Option 1: Automatic download</p>
+        <code style="display: block; background: var(--bg3); padding: 0.8rem; border-radius: 4px; font-size: 0.9rem;">
+            python main.py download
+        </code>
+        <p style="color: var(--text2); font-size: 0.85rem; margin-top: 0.5rem;">
+            Downloads from Oracle's Elixir S3 / Google Drive (needs internet access).
+        </p>
+    </div>
+
+    <div style="background: var(--bg); border-radius: 6px; padding: 1.2rem; margin-bottom: 1.5rem;">
+        <p style="color: var(--accent); font-weight: 600; margin-bottom: 0.8rem;">Option 2: Manual download</p>
+        <ol style="color: var(--text2); font-size: 0.9rem; padding-left: 1.2rem; line-height: 1.8;">
+            <li>Go to <a href="https://oracleselixir.com/tools/downloads" target="_blank">oracleselixir.com/tools/downloads</a></li>
+            <li>Download CSV files for the years you need (2024, 2025, 2026)</li>
+            <li>Save them to the <code>data/</code> folder as:
+                <br><code>data/2024_matches.csv</code>
+                <br><code>data/2025_matches.csv</code>
+                <br><code>data/2026_matches.csv</code>
+            </li>
+            <li>Or use the import command:<br>
+                <code>python main.py import ~/Downloads/2026_LoL_esports_match_data_from_OraclesElixir_20260218.csv</code>
+            </li>
+            <li>Restart <code>python web.py</code></li>
+        </ol>
+    </div>
+
+    <div style="background: var(--bg); border-radius: 6px; padding: 1.2rem;">
+        <p style="color: var(--accent); font-weight: 600; margin-bottom: 0.8rem;">Option 3: Sample data (for testing only)</p>
+        <code style="display: block; background: var(--bg3); padding: 0.8rem; border-radius: 4px; font-size: 0.9rem;">
+            python main.py generate
+        </code>
+        <p style="color: var(--text2); font-size: 0.85rem; margin-top: 0.5rem;">
+            Generates simulated data. Not real match results.
+        </p>
+    </div>
+</div>
+{% endblock %}

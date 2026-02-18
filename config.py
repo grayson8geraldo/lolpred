@@ -5,8 +5,22 @@ Data source: Oracle's Elixir (https://oracleselixir.com)
 Free professional LoL esports match data, updated daily.
 """
 
-# Oracle's Elixir CSV download URLs (Google Drive)
+# Oracle's Elixir CSV download
+# Primary: S3 bucket (current, updated daily)
+# Fallback: Google Drive (older, may be stale)
 # Source: https://oracleselixir.com/tools/downloads
+#
+# S3 URL pattern (date suffix changes daily):
+#   https://oracleselixir-downloadable-match-data.s3-us-west-2.amazonaws.com/
+#   {YEAR}_LoL_esports_match_data_from_OraclesElixir_{YYYYMMDD}.csv
+#
+# To update: visit https://oracleselixir.com/tools/downloads and copy links.
+
+ORACLE_ELIXIR_S3_BUCKET = (
+    "https://oracleselixir-downloadable-match-data.s3-us-west-2.amazonaws.com"
+)
+
+# Google Drive fallback URLs (may be outdated)
 ORACLE_ELIXIR_URLS = {
     2026: "https://drive.google.com/uc?id=1v6LRphp2kYciU4SXp0PCjEMuev1bDejc",
     2025: "https://drive.google.com/uc?id=1v6LRphp2kYciU4SXp0PCjEMuev1bDejc",
