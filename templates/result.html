@@ -9,7 +9,9 @@
         <span class="vs">VS</span>
         <a href="/team/{{ pred.team_b }}">{{ pred.team_b }}</a>
     </div>
-    <div class="format">{{ pred.format }} &middot; Elo: {{ pred.team_a_elo }} vs {{ pred.team_b_elo }}</div>
+    <div class="format">{{ pred.format }} &middot; Elo: {{ pred.team_a_elo }} vs {{ pred.team_b_elo }}
+        {% if pred.data_patch %} &middot; Patch {{ pred.data_patch }}{% endif %}
+    </div>
 </div>
 
 <!-- Winner -->
@@ -35,6 +37,60 @@
         </div>
     </div>
 </div>
+
+<!-- Prediction Factors -->
+{% if pred.factors %}
+<div class="card">
+    <h2>Prediction Factors</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Factor</th>
+                <th style="text-align:right">{{ pred.team_a }}</th>
+                <th style="text-align:right">{{ pred.team_b }}</th>
+                <th style="text-align:right">Impact</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for f in pred.factors %}
+            <tr>
+                <td>{{ f.name }}</td>
+                <td style="text-align:right{% if f.favors == pred.team_a %}; color: var(--accent); font-weight: 600{% endif %}">{{ f.team_a_val }}</td>
+                <td style="text-align:right{% if f.favors == pred.team_b %}; color: var(--accent); font-weight: 600{% endif %}">{{ f.team_b_val }}</td>
+                <td style="text-align:right; color: {% if f.impact > 0 %}var(--accent){% elif f.impact < 0 %}#e74c3c{% else %}var(--text2){% endif %};">
+                    {% if f.impact > 0 %}+{% endif %}{{ f.impact }}%
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Head-to-Head -->
+{% if pred.h2h %}
+<div class="card">
+    <h2>Head-to-Head Record</h2>
+    <div class="stat-grid" style="margin-bottom: 0;">
+        <div class="stat-box">
+            <div class="val">{{ pred.h2h.total_games }}</div>
+            <div class="lbl">Total Games</div>
+        </div>
+        <div class="stat-box">
+            <div class="val">{{ pred.h2h.team_a_wins }}</div>
+            <div class="lbl">{{ pred.team_a }} Wins</div>
+        </div>
+        <div class="stat-box">
+            <div class="val">{{ pred.h2h.team_b_wins }}</div>
+            <div class="lbl">{{ pred.team_b }} Wins</div>
+        </div>
+        <div class="stat-box">
+            <div class="val">{{ pred.h2h.recent_a_wins }}-{{ pred.h2h.recent_b_wins }}</div>
+            <div class="lbl">Recent ({{ pred.h2h.recent_games }}g)</div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Map Count -->
 {% if pred.map_count %}
@@ -85,8 +141,15 @@
             {% set sa = pred.team_a_stats %}
             {% set sb = pred.team_b_stats %}
             <tr><td>Games Played</td><td style="text-align:right">{{ sa.games_played }}</td><td style="text-align:right">{{ sb.games_played }}</td></tr>
-            <tr><td>Win Rate</td><td style="text-align:right">{{ sa.win_rate }}</td><td style="text-align:right">{{ sb.win_rate }}</td></tr>
+            <tr><td>Win Rate (weighted)</td><td style="text-align:right">{{ sa.win_rate }}</td><td style="text-align:right">{{ sb.win_rate }}</td></tr>
+            <tr><td>Streak</td>
+                <td style="text-align:right; color: {% if sa.streak > 0 %}var(--accent){% elif sa.streak < 0 %}#e74c3c{% else %}var(--text2){% endif %}">{{ sa.streak }}</td>
+                <td style="text-align:right; color: {% if sb.streak > 0 %}var(--accent){% elif sb.streak < 0 %}#e74c3c{% else %}var(--text2){% endif %}">{{ sb.streak }}</td>
+            </tr>
             <tr><td>Avg Game (min)</td><td style="text-align:right">{{ sa.avg_game_min }}</td><td style="text-align:right">{{ sb.avg_game_min }}</td></tr>
+            <tr><td>Blue Side WR</td><td style="text-align:right">{{ sa.blue_wr }}</td><td style="text-align:right">{{ sb.blue_wr }}</td></tr>
+            <tr><td>Red Side WR</td><td style="text-align:right">{{ sa.red_wr }}</td><td style="text-align:right">{{ sb.red_wr }}</td></tr>
+            <tr><td>Playoff WR</td><td style="text-align:right">{{ sa.playoff_wr }}</td><td style="text-align:right">{{ sb.playoff_wr }}</td></tr>
             <tr><td>First Tower %</td><td style="text-align:right">{{ sa.first_tower }}</td><td style="text-align:right">{{ sb.first_tower }}</td></tr>
             <tr><td>First Dragon %</td><td style="text-align:right">{{ sa.first_dragon }}</td><td style="text-align:right">{{ sb.first_dragon }}</td></tr>
             <tr><td>First Blood %</td><td style="text-align:right">{{ sa.first_blood }}</td><td style="text-align:right">{{ sb.first_blood }}</td></tr>
@@ -162,6 +225,15 @@
         {% endfor %}
     </div>
 </div>
+
+<!-- Data Info -->
+{% if metadata %}
+<div style="text-align: center; margin-top: 1rem; font-size: 0.8rem; color: var(--text2);">
+    Data: {{ metadata.total_games }} games | Patch {{ metadata.latest_patch }}
+    {% if metadata.latest_game_date %} | Latest: {{ metadata.latest_game_date[:10] }}{% endif %}
+    {% if metadata.data_stale %}<br><span style="color: #e74c3c;">Data is {{ metadata.data_age_hours }}h old — run <code>python main.py download --force</code></span>{% endif %}
+</div>
+{% endif %}
 
 <div style="text-align: center; margin-top: 1rem;">
     <a href="/" style="color: var(--text2);">&larr; New Prediction</a>

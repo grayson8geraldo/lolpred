@@ -3,11 +3,12 @@
 LoL Match Predictor - Web Application (Flask).
 
 Run: python web.py
-Open: http://localhost:5000
+Open: http://localhost:3080
 """
 
 import sys
 import os
+from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -23,8 +24,11 @@ app = Flask(__name__)
 _predictor = None
 _elo = None
 _tracker = None
+_h2h = None
 _team_league_map = None
 _all_teams = []
+_metadata = {}
+_load_error = None
 
 
 def _ensure_data(years):
@@ -39,12 +43,22 @@ def _ensure_data(years):
         download_data(missing)
 
 
-_load_error = None
+def _data_age_hours() -> float | None:
+    """Return hours since newest CSV was modified, or None."""
+    newest = 0
+    for f in os.listdir(DATA_DIR) if os.path.isdir(DATA_DIR) else []:
+        if f.endswith("_matches.csv"):
+            mtime = os.path.getmtime(os.path.join(DATA_DIR, f))
+            newest = max(newest, mtime)
+    if newest == 0:
+        return None
+    return (datetime.now().timestamp() - newest) / 3600
 
 
 def _load_predictor(years=None):
     """Load data and build predictor (cached globally)."""
-    global _predictor, _elo, _tracker, _team_league_map, _all_teams, _load_error
+    global _predictor, _elo, _tracker, _h2h, _team_league_map
+    global _all_teams, _metadata, _load_error
 
     if _predictor is not None:
         return True
@@ -68,8 +82,13 @@ def _load_predictor(years=None):
     df = clean_data(df)
 
     print("Building Elo ratings and team stats...")
-    _elo, _tracker, _team_league_map = build_features(df)
-    _predictor = MatchPredictor(_elo, _tracker, _team_league_map)
+    _elo, _tracker, _h2h, _team_league_map, _metadata = build_features(df)
+    _predictor = MatchPredictor(_elo, _tracker, _h2h, _team_league_map, _metadata)
+
+    # Data freshness info
+    age = _data_age_hours()
+    _metadata["data_age_hours"] = round(age, 1) if age else None
+    _metadata["data_stale"] = age is not None and age > 48
 
     # Build sorted team list — use canonical region name for display
     _all_teams = sorted([
@@ -83,7 +102,12 @@ def _load_predictor(years=None):
         if league in ALL_TOP_LEAGUE_IDS
     ], key=lambda t: t["name"])
 
-    print(f"Loaded {len(_all_teams)} teams. Server ready.")
+    print(f"Loaded {len(_all_teams)} teams from {_metadata.get('total_games', 0)} games.")
+    print(f"Latest patch: {_metadata.get('latest_patch')}, "
+          f"latest game: {_metadata.get('latest_game_date')}")
+    if _metadata.get("data_stale"):
+        print(f"WARNING: Data is {age:.0f}h old. Run 'python main.py download --force' to refresh.")
+    print("Server ready.")
     return True
 
 
@@ -98,7 +122,8 @@ def index():
     if not _load_predictor():
         return _nodata()
     regions = list(TOP_REGIONS.keys())
-    return render_template("index.html", teams=_all_teams, regions=regions)
+    return render_template("index.html", teams=_all_teams, regions=regions,
+                           metadata=_metadata)
 
 
 @app.route("/predict", methods=["POST"])
@@ -114,21 +139,21 @@ def predict():
     if not team_a or not team_b:
         return render_template("index.html", teams=_all_teams,
                                regions=list(TOP_REGIONS.keys()),
-                               error="Select both teams")
+                               error="Select both teams", metadata=_metadata)
 
     if team_a == team_b:
         return render_template("index.html", teams=_all_teams,
                                regions=list(TOP_REGIONS.keys()),
-                               error="Teams must be different")
+                               error="Teams must be different", metadata=_metadata)
 
     prediction = _predictor.predict_match(team_a, team_b, match_format)
 
     if "error" in prediction:
         return render_template("index.html", teams=_all_teams,
                                regions=list(TOP_REGIONS.keys()),
-                               error=prediction["error"])
+                               error=prediction["error"], metadata=_metadata)
 
-    return render_template("result.html", pred=prediction)
+    return render_template("result.html", pred=prediction, metadata=_metadata)
 
 
 @app.route("/rankings")
@@ -159,10 +184,11 @@ def rankings():
         title = "Global Rankings"
         region = ""
 
+    current_patch = _metadata.get("latest_patch")
     for i, (team, elo) in enumerate(teams, 1):
         raw_league = _team_league_map.get(team, "")
         league = LEAGUE_TO_REGION.get(raw_league, raw_league)
-        stats = _tracker.get_stats(team)
+        stats = _tracker.get_stats(team, current_patch=current_patch)
         rankings_data.append({
             "rank": i,
             "team": team,
@@ -170,11 +196,12 @@ def rankings():
             "elo": round(elo, 1),
             "win_rate": f"{stats['win_rate']*100:.0f}%" if stats and stats.get("win_rate") is not None else "N/A",
             "games": stats["games_played"] if stats else 0,
+            "streak": stats.get("streak", 0) if stats else 0,
         })
 
     return render_template("rankings.html", rankings=rankings_data,
                            title=title, regions=list(TOP_REGIONS.keys()),
-                           selected_region=region)
+                           selected_region=region, metadata=_metadata)
 
 
 @app.route("/team/<team_name>")
@@ -183,7 +210,8 @@ def team_stats(team_name):
     if not _load_predictor():
         return _nodata()
 
-    stats = _tracker.get_stats(team_name)
+    current_patch = _metadata.get("latest_patch")
+    stats = _tracker.get_stats(team_name, current_patch=current_patch)
     if not stats:
         return render_template("team.html", error=f"Team '{team_name}' not found",
                                team_name=team_name)
@@ -220,9 +248,13 @@ def team_stats(team_name):
         "avg_heralds": rnd(stats.get("avg_heralds")),
         "gold_diff_10": rnd(stats.get("avg_golddiff10"), 0),
         "gold_diff_15": rnd(stats.get("avg_golddiff15"), 0),
+        "streak": stats.get("streak", 0),
+        "blue_wr": pct(stats.get("blue_wr")),
+        "red_wr": pct(stats.get("red_wr")),
+        "playoff_wr": pct(stats.get("playoff_wr")),
     }
 
-    return render_template("team.html", team=team_data)
+    return render_template("team.html", team=team_data, metadata=_metadata)
 
 
 @app.route("/api/teams")
@@ -233,9 +265,22 @@ def api_teams():
     region = request.args.get("region", "")
     if region and region in TOP_REGIONS:
         league_ids = TOP_REGIONS[region]
-        filtered = [t for t in _all_teams if t["league"] in league_ids]
+        filtered = [t for t in _all_teams if t["raw_league"] in league_ids]
         return jsonify(filtered)
     return jsonify(_all_teams)
+
+
+@app.route("/api/refresh", methods=["POST"])
+def api_refresh():
+    """Force re-download data and reload predictor."""
+    global _predictor, _load_error
+    _predictor = None
+    _load_error = None
+    years = [2024, 2025, 2026]
+    download_data(years, force=True)
+    if _load_predictor(years):
+        return jsonify({"status": "ok", "metadata": _metadata})
+    return jsonify({"status": "error", "error": _load_error}), 500
 
 
 if __name__ == "__main__":

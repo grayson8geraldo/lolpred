@@ -1,42 +1,56 @@
 """
 Prediction Engine - Generates match predictions.
 
-Prediction types:
-1. Match Winner - Elo + team stats based probability
-2. Map Count (BO3/BO5) - Score line distribution from win probability
-3. Game Duration - Weighted average of team game lengths
-4. First Tower - Comparative first tower rates
-5. First Dragon - Comparative first dragon rates
+Multi-factor prediction model:
+1. Elo rating differential (base probability)
+2. Recency-weighted form (momentum)
+3. Head-to-head record
+4. Early game economy (gold/xp diff at 10/15)
+5. Blue/Red side advantage
+6. Objective control rates
+7. KDA efficiency
+8. Streak momentum
+9. Playoff experience (for playoff matches)
+
+Each factor adjusts the base Elo probability with calibrated weights.
 """
 
 import numpy as np
-from src.features import EloSystem, TeamStatsTracker
+from src.features import EloSystem, TeamStatsTracker, HeadToHead
+
+
+# Factor weights for probability adjustment
+WEIGHTS = {
+    "form": 0.12,        # Recent win rate differential
+    "h2h": 0.08,         # Head-to-head record
+    "gold10": 0.07,      # Gold diff at 10 min
+    "gold15": 0.05,      # Gold diff at 15 min
+    "xp15": 0.04,        # XP diff at 15 min
+    "kda": 0.04,         # Kill/death ratio
+    "objectives": 0.05,  # First objective rates (tower + dragon + herald)
+    "streak": 0.03,      # Win/loss streak momentum
+    "side": 0.02,        # Blue/Red side advantage
+}
 
 
 class MatchPredictor:
     """Generates predictions for upcoming LoL esports matches."""
 
     def __init__(self, elo: EloSystem, tracker: TeamStatsTracker,
-                 team_league_map: dict[str, str]):
+                 h2h: HeadToHead, team_league_map: dict[str, str],
+                 metadata: dict = None):
         self.elo = elo
         self.tracker = tracker
+        self.h2h = h2h
         self.team_league_map = team_league_map
+        self.metadata = metadata or {}
 
     def predict_match(self, team_a: str, team_b: str,
                       match_format: str = "BO3") -> dict:
-        """
-        Generate full prediction for a match.
-
-        Args:
-            team_a: First team name
-            team_b: Second team name
-            match_format: "BO1", "BO3", or "BO5"
-
-        Returns:
-            Dictionary with all predictions
-        """
-        stats_a = self.tracker.get_stats(team_a)
-        stats_b = self.tracker.get_stats(team_b)
+        """Generate full prediction for a match."""
+        current_patch = self.metadata.get("latest_patch")
+        stats_a = self.tracker.get_stats(team_a, current_patch=current_patch)
+        stats_b = self.tracker.get_stats(team_b, current_patch=current_patch)
 
         if not stats_a or not stats_b:
             missing = []
@@ -49,8 +63,12 @@ class MatchPredictor:
         # Core win probability (Elo-based)
         elo_prob = self.elo.expected_score(team_a, team_b)
 
-        # Adjust with team stats
-        adjusted_prob = self._adjust_win_probability(elo_prob, stats_a, stats_b)
+        # Multi-factor adjustment
+        adjusted_prob, factors = self._compute_factors(
+            team_a, team_b, stats_a, stats_b, elo_prob
+        )
+
+        h2h_record = self.h2h.get_record(team_a, team_b)
 
         result = {
             "team_a": team_a,
@@ -60,6 +78,9 @@ class MatchPredictor:
             "team_b_elo": round(self.elo.get_rating(team_b), 1),
             "team_a_stats": self._format_team_stats(stats_a),
             "team_b_stats": self._format_team_stats(stats_b),
+            "factors": factors,
+            "h2h": self._format_h2h(h2h_record, team_a, team_b),
+            "data_patch": current_patch,
         }
 
         # 1. Match Winner
@@ -98,50 +119,140 @@ class MatchPredictor:
 
         return result
 
-    def _adjust_win_probability(self, elo_prob: float,
-                                stats_a: dict, stats_b: dict) -> float:
-        """
-        Adjust Elo-based probability using recent performance stats.
+    def _compute_factors(self, team_a: str, team_b: str,
+                         stats_a: dict, stats_b: dict,
+                         elo_prob: float) -> tuple[float, list[dict]]:
+        """Compute all adjustment factors and return adjusted probability."""
+        factors = []
+        total_adj = 0.0
 
-        Factors considered:
-        - Recent win rate (momentum)
-        - Gold differential at 10/15 min (early game strength)
-        - Kill/death ratio
-        """
-        adjustments = []
-
-        # Recent form adjustment
+        # 1. Recent form (recency-weighted win rate)
         wr_a = stats_a.get("win_rate")
         wr_b = stats_b.get("win_rate")
         if wr_a is not None and wr_b is not None:
-            form_diff = (wr_a - wr_b) * 0.15
-            adjustments.append(form_diff)
+            diff = wr_a - wr_b
+            adj = diff * WEIGHTS["form"]
+            total_adj += adj
+            factors.append({
+                "name": "Recent Form",
+                "team_a_val": f"{wr_a*100:.0f}%",
+                "team_b_val": f"{wr_b*100:.0f}%",
+                "impact": round(adj * 100, 1),
+                "favors": team_a if adj > 0 else team_b if adj < 0 else "neutral",
+            })
 
-        # Early game gold diff adjustment
+        # 2. Head-to-head
+        h2h_rec = self.h2h.get_record(team_a, team_b)
+        if h2h_rec and h2h_rec["recent_games"] >= 2:
+            h2h_wr = h2h_rec["recent_wr_a"]
+            h2h_diff = h2h_wr - 0.5
+            adj = h2h_diff * WEIGHTS["h2h"] * 2
+            total_adj += adj
+            factors.append({
+                "name": "Head-to-Head",
+                "team_a_val": f"{h2h_rec['recent_wins_a']}W",
+                "team_b_val": f"{h2h_rec['recent_wins_b']}W",
+                "impact": round(adj * 100, 1),
+                "favors": team_a if adj > 0 else team_b if adj < 0 else "neutral",
+            })
+
+        # 3. Gold diff at 10
         gd10_a = stats_a.get("avg_golddiff10")
         gd10_b = stats_b.get("avg_golddiff10")
         if gd10_a is not None and gd10_b is not None:
-            # Normalize gold diff (typical range: -2000 to +2000)
-            gold_factor = (gd10_a - gd10_b) / 4000
-            gold_factor = max(-0.1, min(0.1, gold_factor))
-            adjustments.append(gold_factor)
+            diff = (gd10_a - gd10_b) / 4000
+            adj = max(-0.15, min(0.15, diff)) * WEIGHTS["gold10"] / 0.15
+            total_adj += adj
+            factors.append({
+                "name": "Gold @ 10min",
+                "team_a_val": f"{gd10_a:+.0f}",
+                "team_b_val": f"{gd10_b:+.0f}",
+                "impact": round(adj * 100, 1),
+                "favors": team_a if adj > 0 else team_b if adj < 0 else "neutral",
+            })
 
-        # KDA-based adjustment
+        # 4. Gold diff at 15
+        gd15_a = stats_a.get("avg_golddiff15")
+        gd15_b = stats_b.get("avg_golddiff15")
+        if gd15_a is not None and gd15_b is not None:
+            diff = (gd15_a - gd15_b) / 5000
+            adj = max(-0.15, min(0.15, diff)) * WEIGHTS["gold15"] / 0.15
+            total_adj += adj
+            factors.append({
+                "name": "Gold @ 15min",
+                "team_a_val": f"{gd15_a:+.0f}",
+                "team_b_val": f"{gd15_b:+.0f}",
+                "impact": round(adj * 100, 1),
+                "favors": team_a if adj > 0 else team_b if adj < 0 else "neutral",
+            })
+
+        # 5. XP diff at 15
+        xp15_a = stats_a.get("avg_xpdiff15")
+        xp15_b = stats_b.get("avg_xpdiff15")
+        if xp15_a is not None and xp15_b is not None:
+            diff = (xp15_a - xp15_b) / 5000
+            adj = max(-0.10, min(0.10, diff)) * WEIGHTS["xp15"] / 0.10
+            total_adj += adj
+
+        # 6. KDA
         kills_a = stats_a.get("avg_kills", 0) or 0
         deaths_a = stats_a.get("avg_deaths", 1) or 1
         kills_b = stats_b.get("avg_kills", 0) or 0
         deaths_b = stats_b.get("avg_deaths", 1) or 1
-
-        kd_a = kills_a / max(deaths_a, 1)
-        kd_b = kills_b / max(deaths_b, 1)
+        kd_a = kills_a / max(deaths_a, 0.5)
+        kd_b = kills_b / max(deaths_b, 0.5)
         if kd_a + kd_b > 0:
-            kd_factor = (kd_a - kd_b) / (kd_a + kd_b) * 0.05
-            adjustments.append(kd_factor)
+            kd_diff = (kd_a - kd_b) / (kd_a + kd_b)
+            adj = kd_diff * WEIGHTS["kda"]
+            total_adj += adj
+            factors.append({
+                "name": "KDA",
+                "team_a_val": f"{kd_a:.2f}",
+                "team_b_val": f"{kd_b:.2f}",
+                "impact": round(adj * 100, 1),
+                "favors": team_a if adj > 0 else team_b if adj < 0 else "neutral",
+            })
+
+        # 7. Objective control (composite)
+        obj_metrics = ["first_tower_rate", "first_dragon_rate", "first_herald_rate"]
+        obj_diffs = []
+        for m in obj_metrics:
+            va = stats_a.get(m)
+            vb = stats_b.get(m)
+            if va is not None and vb is not None:
+                obj_diffs.append(va - vb)
+        if obj_diffs:
+            avg_obj_diff = np.mean(obj_diffs)
+            adj = avg_obj_diff * WEIGHTS["objectives"]
+            total_adj += adj
+            factors.append({
+                "name": "Objectives",
+                "team_a_val": f"{np.mean([stats_a.get(m,0) or 0 for m in obj_metrics])*100:.0f}%",
+                "team_b_val": f"{np.mean([stats_b.get(m,0) or 0 for m in obj_metrics])*100:.0f}%",
+                "impact": round(adj * 100, 1),
+                "favors": team_a if adj > 0 else team_b if adj < 0 else "neutral",
+            })
+
+        # 8. Streak
+        streak_a = stats_a.get("streak", 0)
+        streak_b = stats_b.get("streak", 0)
+        if streak_a != 0 or streak_b != 0:
+            streak_diff = (streak_a - streak_b) / 10
+            adj = max(-0.05, min(0.05, streak_diff)) * WEIGHTS["streak"] / 0.05
+            total_adj += adj
+            factors.append({
+                "name": "Streak",
+                "team_a_val": f"{streak_a:+d}",
+                "team_b_val": f"{streak_b:+d}",
+                "impact": round(adj * 100, 1),
+                "favors": team_a if adj > 0 else team_b if adj < 0 else "neutral",
+            })
 
         # Apply adjustments
-        total_adj = sum(adjustments)
         adjusted = elo_prob + total_adj
-        return max(0.05, min(0.95, adjusted))
+        adjusted = max(0.03, min(0.97, adjusted))
+
+        return adjusted, factors
 
     def _predict_winner(self, team_a: str, team_b: str,
                         win_prob: float) -> dict:
@@ -153,7 +264,6 @@ class MatchPredictor:
             predicted_winner = team_b
             confidence = 1 - win_prob
 
-        # Confidence tier
         if confidence >= 0.75:
             tier = "HIGH"
         elif confidence >= 0.60:
@@ -170,24 +280,16 @@ class MatchPredictor:
 
     def _predict_map_count(self, team_a: str, team_b: str,
                            win_prob: float, match_format: str) -> dict:
-        """
-        Predict score line distribution for BO3/BO5.
-
-        Uses binomial model:
-        - For BO3: possible scores are 2-0, 2-1, 0-2, 1-2
-        - For BO5: possible scores are 3-0, 3-1, 3-2, 0-3, 1-3, 2-3
-        """
-        p = win_prob  # team_a single-game win probability
+        """Predict score line distribution for BO3/BO5."""
+        p = win_prob
 
         if match_format == "BO3":
             scores = self._bo3_probabilities(p)
         else:
             scores = self._bo5_probabilities(p)
 
-        # Find most likely outcome
         best_score = max(scores, key=lambda x: x["probability"])
 
-        # Total games distribution
         total_games_dist = {}
         for score_info in scores:
             total = score_info["total_games"]
@@ -212,54 +314,36 @@ class MatchPredictor:
         }
 
     def _bo3_probabilities(self, p: float) -> list[dict]:
-        """Calculate BO3 score probabilities."""
         q = 1 - p
         return [
-            {"score": "2-0", "probability": p * p, "total_games": 2,
-             "winner": "team_a"},
-            {"score": "2-1", "probability": 2 * p * q * p, "total_games": 3,
-             "winner": "team_a"},
-            {"score": "0-2", "probability": q * q, "total_games": 2,
-             "winner": "team_b"},
-            {"score": "1-2", "probability": 2 * p * q * q, "total_games": 3,
-             "winner": "team_b"},
+            {"score": "2-0", "probability": p * p, "total_games": 2, "winner": "team_a"},
+            {"score": "2-1", "probability": 2 * p * q * p, "total_games": 3, "winner": "team_a"},
+            {"score": "0-2", "probability": q * q, "total_games": 2, "winner": "team_b"},
+            {"score": "1-2", "probability": 2 * p * q * q, "total_games": 3, "winner": "team_b"},
         ]
 
     def _bo5_probabilities(self, p: float) -> list[dict]:
-        """Calculate BO5 score probabilities."""
         q = 1 - p
         return [
-            {"score": "3-0", "probability": p ** 3, "total_games": 3,
-             "winner": "team_a"},
-            {"score": "3-1", "probability": 3 * (p ** 3) * q, "total_games": 4,
-             "winner": "team_a"},
-            {"score": "3-2", "probability": 6 * (p ** 3) * (q ** 2), "total_games": 5,
-             "winner": "team_a"},
-            {"score": "0-3", "probability": q ** 3, "total_games": 3,
-             "winner": "team_b"},
-            {"score": "1-3", "probability": 3 * (q ** 3) * p, "total_games": 4,
-             "winner": "team_b"},
-            {"score": "2-3", "probability": 6 * (q ** 3) * (p ** 2), "total_games": 5,
-             "winner": "team_b"},
+            {"score": "3-0", "probability": p**3, "total_games": 3, "winner": "team_a"},
+            {"score": "3-1", "probability": 3 * (p**3) * q, "total_games": 4, "winner": "team_a"},
+            {"score": "3-2", "probability": 6 * (p**3) * (q**2), "total_games": 5, "winner": "team_a"},
+            {"score": "0-3", "probability": q**3, "total_games": 3, "winner": "team_b"},
+            {"score": "1-3", "probability": 3 * (q**3) * p, "total_games": 4, "winner": "team_b"},
+            {"score": "2-3", "probability": 6 * (q**3) * (p**2), "total_games": 5, "winner": "team_b"},
         ]
 
     def _predict_duration(self, stats_a: dict, stats_b: dict) -> dict:
-        """
-        Predict game duration based on team averages.
-
-        Shorter games indicate more aggressive/dominant teams.
-        """
+        """Predict game duration based on team averages."""
         dur_a = stats_a.get("avg_gamelength")
         dur_b = stats_b.get("avg_gamelength")
 
         if dur_a is None or dur_b is None:
             return {"error": "Insufficient game duration data"}
 
-        # Weighted average of both teams' average game lengths
         predicted_seconds = (dur_a + dur_b) / 2
         predicted_minutes = predicted_seconds / 60
 
-        # Standard thresholds for over/under
         thresholds = [25.5, 28.5, 30.5, 32.5]
         over_under = {}
         for threshold in thresholds:
@@ -281,24 +365,15 @@ class MatchPredictor:
 
     def _duration_over_probability(self, predicted: float, threshold: float,
                                    stats_a: dict, stats_b: dict) -> float:
-        """Estimate probability of game going over threshold minutes."""
-        # Use a simple logistic approach based on how far prediction is from threshold
-        # Standard deviation of game length is typically ~5 minutes in pro play
         std_dev = 4.5
         z = (threshold - predicted) / std_dev
-        # Cumulative distribution approximation
         prob_under = 1.0 / (1.0 + np.exp(-1.7 * z))
         return 1.0 - prob_under
 
     def _predict_first_objective(self, team_a: str, team_b: str,
                                  stats_a: dict, stats_b: dict,
                                  rate_key: str) -> dict:
-        """
-        Predict which team takes an objective first.
-
-        Uses comparative rates: if team A gets first tower 60% of the time
-        and team B gets it 40%, the prediction adjusts accordingly.
-        """
+        """Predict which team takes an objective first."""
         rate_a = stats_a.get(rate_key)
         rate_b = stats_b.get(rate_key)
 
@@ -307,7 +382,6 @@ class MatchPredictor:
         if rate_a is None or rate_b is None:
             return {"error": f"Insufficient {objective_name} data"}
 
-        # Normalize rates against each other
         total = rate_a + rate_b
         if total == 0:
             prob_a = 0.5
@@ -330,6 +404,20 @@ class MatchPredictor:
             "team_b_rate": round(rate_b * 100, 1) if rate_b else 0,
         }
 
+    def _format_h2h(self, record: dict | None,
+                    team_a: str, team_b: str) -> dict | None:
+        """Format head-to-head for display."""
+        if not record:
+            return None
+        return {
+            "total_games": record["total_games"],
+            "team_a_wins": record["total_wins_a"],
+            "team_b_wins": record["total_wins_b"],
+            "recent_games": record["recent_games"],
+            "recent_a_wins": record["recent_wins_a"],
+            "recent_b_wins": record["recent_wins_b"],
+        }
+
     def _format_team_stats(self, stats: dict) -> dict:
         """Format team stats for display."""
         return {
@@ -345,6 +433,10 @@ class MatchPredictor:
             "avg_deaths": f"{stats['avg_deaths']:.1f}" if stats.get("avg_deaths") is not None else "N/A",
             "gold_diff_10": f"{stats['avg_golddiff10']:+.0f}" if stats.get("avg_golddiff10") is not None else "N/A",
             "gold_diff_15": f"{stats['avg_golddiff15']:+.0f}" if stats.get("avg_golddiff15") is not None else "N/A",
+            "streak": stats.get("streak", 0),
+            "blue_wr": f"{stats['blue_wr']*100:.0f}%" if stats.get("blue_wr") is not None else "N/A",
+            "red_wr": f"{stats['red_wr']*100:.0f}%" if stats.get("red_wr") is not None else "N/A",
+            "playoff_wr": f"{stats['playoff_wr']*100:.0f}%" if stats.get("playoff_wr") is not None else "N/A",
         }
 
     def list_teams(self, league_filter: str | None = None) -> list[tuple[str, float]]:

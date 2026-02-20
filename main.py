@@ -117,9 +117,9 @@ def cmd_predict(args):
         df = filter_top_regions(df)
 
     print("Building team features and Elo ratings...")
-    elo, tracker, team_league_map = build_features(df)
+    elo, tracker, h2h, team_league_map, metadata = build_features(df)
 
-    predictor = MatchPredictor(elo, tracker, team_league_map)
+    predictor = MatchPredictor(elo, tracker, h2h, team_league_map, metadata)
     prediction = predictor.predict_match(team_a, team_b, match_format)
 
     print(display_prediction(prediction))
@@ -134,9 +134,9 @@ def cmd_rankings(args):
     df = clean_data(df)
 
     print("Building team features and Elo ratings...")
-    elo, tracker, team_league_map = build_features(df)
+    elo, tracker, h2h, team_league_map, metadata = build_features(df)
 
-    predictor = MatchPredictor(elo, tracker, team_league_map)
+    predictor = MatchPredictor(elo, tracker, h2h, team_league_map, metadata)
 
     if args.region:
         title = f"{args.region} Elo Rankings"
@@ -165,7 +165,7 @@ def cmd_teams(args):
     df = clean_data(df)
 
     print("Building team features and Elo ratings...")
-    elo, tracker, team_league_map = build_features(df)
+    elo, tracker, h2h, team_league_map, metadata = build_features(df)
 
     if args.region:
         league_ids = TOP_REGIONS.get(args.region, [args.region])
@@ -199,7 +199,7 @@ def cmd_stats(args):
     df = clean_data(df)
 
     print("Building team features and Elo ratings...")
-    elo, tracker, team_league_map = build_features(df)
+    elo, tracker, h2h, team_league_map, metadata = build_features(df)
 
     stats = tracker.get_stats(team_name)
     if not stats:
