@@ -32,10 +32,10 @@ ORACLE_ELIXIR_URLS = {
 # Top 5 regions — maps display name to ALL Oracle's Elixir league IDs
 # that belong to that region (including cups, qualifiers, academy, etc.)
 TOP_REGIONS = {
-    "LCK": ["LCK", "LCK CL", "LCK Cup", "LCKC"],
+    "LCK": ["LCK", "LCK CL", "LCK Cup", "LCKC", "KeSPA"],
     "LPL": ["LPL"],
     "LEC": ["LEC"],
-    "LCS": ["LCS", "LTA", "LTA North", "LTA South", "LTAN", "LTAS"],
+    "LCS": ["LCS", "LTA", "LTA N", "LTA S", "LTA North", "LTA South", "LTAN", "LTAS"],
     "PCS": ["PCS"],
 }
 
