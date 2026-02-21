@@ -138,6 +138,36 @@ def import_csv(csv_path: str, year: int = None) -> None:
     print(f"  Imported {csv_path} -> {dest} ({size_mb:.1f} MB)")
 
 
+def is_sample_data(df: pd.DataFrame) -> bool:
+    """Detect whether a DataFrame contains generated sample data vs real Oracle's Elixir data.
+
+    Checks multiple heuristics:
+    - Fake champion bans (Champion_A, Champion_B, etc.)
+    - Artificial gameid format (OE:YYYY:NNNNN)
+    - Too few columns (real OE data has 100+, sample has ~48)
+    """
+    if df.empty:
+        return False
+
+    # Check bans — sample data uses "Champion_A", "Champion_B", etc.
+    if "ban1" in df.columns:
+        sample_bans = df["ban1"].dropna().head(20)
+        if len(sample_bans) > 0 and sample_bans.str.startswith("Champion_").all():
+            return True
+
+    # Check gameid format — sample uses "OE:YYYY:NNNNN"
+    if "gameid" in df.columns:
+        sample_ids = df["gameid"].dropna().head(20)
+        if len(sample_ids) > 0 and sample_ids.str.match(r"^OE:\d{4}:\d+$").all():
+            return True
+
+    # Real OE data has 100+ columns; sample has ~48
+    if len(df.columns) < 60:
+        return True
+
+    return False
+
+
 def load_data(years: list[int]) -> pd.DataFrame:
     """Load and concatenate CSV data for specified years."""
     frames = []

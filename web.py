@@ -13,7 +13,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from flask import Flask, render_template, request, jsonify
-from src.data_loader import load_data, clean_data, download_data
+from src.data_loader import load_data, clean_data, download_data, is_sample_data
 from src.features import build_features
 from src.predictor import MatchPredictor
 from config import TOP_REGIONS, DATA_DIR, LEAGUE_TO_REGION, ALL_TOP_LEAGUE_IDS
@@ -78,6 +78,13 @@ def _load_predictor(years=None):
         _load_error = str(e)
         print(f"ERROR: {_load_error}")
         return False
+
+    if is_sample_data(df):
+        _metadata["is_sample_data"] = True
+        print("WARNING: Using GENERATED sample data. Predictions will be inaccurate.")
+        print("  Import real data: python main.py import <csv_path>")
+    else:
+        _metadata["is_sample_data"] = False
 
     df = clean_data(df)
 

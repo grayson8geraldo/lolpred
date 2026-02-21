@@ -30,12 +30,31 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src.data_loader import (
     download_data, load_data, clean_data, filter_top_regions,
-    generate_and_save_sample_data, import_csv,
+    generate_and_save_sample_data, import_csv, is_sample_data,
 )
 from src.features import build_features
 from src.predictor import MatchPredictor
 from src.display import display_prediction, display_team_rankings, display_help
 from config import TOP_REGIONS
+
+
+SAMPLE_DATA_WARNING = """
+  ╔══════════════════════════════════════════════════════════════════╗
+  ║  ⚠  WARNING: Using GENERATED sample data, NOT real match data  ║
+  ║                                                                  ║
+  ║  Predictions will be inaccurate. To fix:                         ║
+  ║  1. Download CSV from https://oracleselixir.com/tools/downloads  ║
+  ║  2. Run: python main.py import <path_to_csv>                     ║
+  ╚══════════════════════════════════════════════════════════════════╝
+"""
+
+
+def _warn_if_sample(df) -> bool:
+    """Print a warning if the data is generated sample data. Returns True if sample."""
+    if is_sample_data(df):
+        print(SAMPLE_DATA_WARNING)
+        return True
+    return False
 
 
 def cmd_download(args):
@@ -111,6 +130,7 @@ def cmd_predict(args):
 
     print(f"Loading data for years: {years}...")
     df = load_data(years)
+    _warn_if_sample(df)
     df = clean_data(df)
 
     if args.region:
@@ -131,6 +151,7 @@ def cmd_rankings(args):
 
     print(f"Loading data for years: {years}...")
     df = load_data(years)
+    _warn_if_sample(df)
     df = clean_data(df)
 
     print("Building team features and Elo ratings...")
@@ -162,6 +183,7 @@ def cmd_teams(args):
 
     print(f"Loading data for years: {years}...")
     df = load_data(years)
+    _warn_if_sample(df)
     df = clean_data(df)
 
     print("Building team features and Elo ratings...")
@@ -196,6 +218,7 @@ def cmd_stats(args):
 
     print(f"Loading data for years: {years}...")
     df = load_data(years)
+    _warn_if_sample(df)
     df = clean_data(df)
 
     print("Building team features and Elo ratings...")
