@@ -22,9 +22,9 @@ from src.features import EloSystem, TeamStatsTracker, HeadToHead
 # Factor weights for probability adjustment
 WEIGHTS = {
     "form": 0.12,        # Recent win rate differential
-    "h2h": 0.08,         # Head-to-head record
-    "gold10": 0.07,      # Gold diff at 10 min
-    "gold15": 0.05,      # Gold diff at 15 min
+    "h2h": 0.15,         # Head-to-head record (boosted from 0.08)
+    "gold10": 0.05,      # Gold diff at 10 min (reduced from 0.07)
+    "gold15": 0.04,      # Gold diff at 15 min (reduced from 0.05)
     "xp15": 0.04,        # XP diff at 15 min
     "kda": 0.04,         # Kill/death ratio
     "objectives": 0.05,  # First objective rates (tower + dragon + herald)
@@ -141,12 +141,20 @@ class MatchPredictor:
                 "favors": team_a if adj > 0 else team_b if adj < 0 else "neutral",
             })
 
-        # 2. Head-to-head
+        # 2. Head-to-head (with nonlinear scaling for dominant records)
         h2h_rec = self.h2h.get_record(team_a, team_b)
         if h2h_rec and h2h_rec["recent_games"] >= 2:
             h2h_wr = h2h_rec["recent_wr_a"]
             h2h_diff = h2h_wr - 0.5
             adj = h2h_diff * WEIGHTS["h2h"] * 2
+
+            # Nonlinear boost for dominant H2H records (e.g., 0-3, 0-5)
+            # dominance: 0 = even split, 1 = total domination
+            dominance = abs(h2h_diff) * 2
+            if dominance > 0.7 and h2h_rec["recent_games"] >= 3:
+                boost = 1.0 + (dominance - 0.7) * 1.0  # Up to 1.3x
+                adj *= boost
+
             total_adj += adj
             factors.append({
                 "name": "Head-to-Head",
